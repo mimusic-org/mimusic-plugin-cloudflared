@@ -68,9 +68,10 @@ function switchTab(tabName) {
         page.classList.toggle('active', page.id === 'tab-' + tabName);
     });
 
-    // 切换到设置页时加载 release 信息
+    // 切换到设置页时加载 release 信息和下载链接
     if (tabName === 'settings') {
         loadReleaseInfo();
+        loadManualDownloadLink();
     }
 }
 
@@ -360,6 +361,72 @@ async function pollDownloadStatus() {
         }
     } catch (e) {
         console.error('轮询下载状态失败:', e);
+    }
+}
+
+// ============================================
+// 手动下载链接 & 文件上传
+// ============================================
+
+function loadManualDownloadLink() {
+    const linkEl = document.getElementById('manual-download-link');
+    const mapping = PLATFORM_MAP[serverPlatform];
+    if (!mapping) {
+        linkEl.textContent = '不支持的平台';
+        linkEl.removeAttribute('href');
+        return;
+    }
+    const url = 'https://github.com/cloudflare/cloudflared/releases/latest/download/' + mapping.file;
+    linkEl.href = url;
+    linkEl.textContent = mapping.file;
+}
+
+async function uploadCloudflared() {
+    const fileInput = document.getElementById('upload-file-input');
+    const btn = document.getElementById('btn-upload');
+    const progressBar = document.getElementById('upload-progress');
+
+    if (!fileInput.files || fileInput.files.length === 0) return;
+
+    const file = fileInput.files[0];
+    btn.disabled = true;
+    btn.innerHTML = '<span class="material-symbols-outlined">uploading</span> 上传中...';
+    progressBar.classList.remove('hidden');
+    progressBar.querySelector('.progress-linear-fill').style.width = '0%';
+    progressBar.classList.add('progress-indeterminate');
+
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(API_BASE + '/api/upload', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + getAuthToken()
+            },
+            body: formData
+        });
+
+        const resp = await response.json();
+        progressBar.classList.remove('progress-indeterminate');
+
+        if (resp && resp.data && resp.data.message) {
+            progressBar.querySelector('.progress-linear-fill').style.width = '100%';
+            showSnackbar(resp.data.message);
+            refreshStatus();
+        } else {
+            showSnackbar('上传失败: ' + (resp && resp.data ? resp.data.message : '未知错误'));
+        }
+    } catch (e) {
+        progressBar.classList.remove('progress-indeterminate');
+        showSnackbar('上传失败: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined">upload_file</span> 选择文件上传';
+        fileInput.value = '';
+        setTimeout(() => {
+            progressBar.classList.add('hidden');
+        }, 2000);
     }
 }
 

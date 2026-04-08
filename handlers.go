@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -248,4 +249,66 @@ func handleReleases(req *http.Request) (*plugin.RouterResponse, error) {
 	}
 
 	return plugin.SuccessResponse(release), nil
+}
+
+// handleUpload 手动上传 cloudflared 二进制文件
+// POST /cloudflared/api/upload
+func handleUpload(req *http.Request) (*plugin.RouterResponse, error) {
+	// 限制上传大小 100MB
+	if err := req.ParseMultipartForm(100 << 20); err != nil {
+		return plugin.ErrorResponse(http.StatusBadRequest, "解析上传文件失败: "+err.Error()), nil
+	}
+
+	file, header, err := req.FormFile("file")
+	if err != nil {
+		return plugin.ErrorResponse(http.StatusBadRequest, "获取上传文件失败: "+err.Error()), nil
+	}
+	defer file.Close()
+
+	slog.Info("收到上传文件", "filename", header.Filename, "size", header.Size)
+
+	// 确保 bin 目录存在
+	binDir := "/cloudflared/bin"
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		return plugin.ErrorResponse(http.StatusInternalServerError, "创建目录失败: "+err.Error()), nil
+	}
+
+	// 根据上传文件名判断目标文件名
+	targetName := "cloudflared"
+	if len(header.Filename) > 4 && header.Filename[len(header.Filename)-4:] == ".exe" {
+		targetName = "cloudflared.exe"
+	}
+	targetPath := binDir + "/" + targetName
+
+	// 先写入临时文件再重命名
+	tmpPath := targetPath + ".upload.tmp"
+	outFile, err := os.Create(tmpPath)
+	if err != nil {
+		return plugin.ErrorResponse(http.StatusInternalServerError, "创建临时文件失败: "+err.Error()), nil
+	}
+
+	written, err := io.Copy(outFile, file)
+	if err != nil {
+		outFile.Close()
+		os.Remove(tmpPath)
+		return plugin.ErrorResponse(http.StatusInternalServerError, "写入文件失败: "+err.Error()), nil
+	}
+	outFile.Close()
+
+	// 重命名为最终文件
+	if err := os.Rename(tmpPath, targetPath); err != nil {
+		os.Remove(tmpPath)
+		return plugin.ErrorResponse(http.StatusInternalServerError, "保存文件失败: "+err.Error()), nil
+	}
+
+	// 设置可执行权限
+	os.Chmod(targetPath, 0755)
+
+	slog.Info("cloudflared 上传完成", "path", targetPath, "size", written)
+
+	return plugin.SuccessResponse(map[string]interface{}{
+		"message":  "上传成功",
+		"filename": targetName,
+		"size":     written,
+	}), nil
 }

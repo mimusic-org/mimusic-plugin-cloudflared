@@ -114,7 +114,7 @@
             <div class="card">
                 <div class="card-header">
                     <span class="material-symbols-outlined">download</span>
-                    <span class="card-title">下载管理</span>
+                    <span class="card-title">自动下载</span>
                 </div>
                 <div class="card-body">
                     <div class="info-row">
@@ -130,6 +130,35 @@
                         </button>
                     </div>
                     <div id="download-progress" class="progress-linear hidden">
+                        <div class="progress-linear-fill"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 手动上传卡片 -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="material-symbols-outlined">upload_file</span>
+                    <span class="card-title">手动上传</span>
+                </div>
+                <div class="card-body">
+                    <p style="color:var(--md-on-surface-variant);font-size:14px;margin:0 0 12px;">
+                        如果自动下载失败，可以手动下载后上传。
+                    </p>
+                    <div class="info-row">
+                        <span class="info-label">下载链接</span>
+                        <span class="info-value">
+                            <a id="manual-download-link" href="#" target="_blank" style="color:var(--md-primary);text-decoration:none;word-break:break-all;">加载中...</a>
+                        </span>
+                    </div>
+                    <div class="action-row" style="gap:8px;flex-wrap:wrap;">
+                        <input type="file" id="upload-file-input" style="display:none;" onchange="uploadCloudflared()">
+                        <button id="btn-upload" class="btn-outlined" onclick="document.getElementById('upload-file-input').click()">
+                            <span class="material-symbols-outlined">upload_file</span>
+                            选择文件上传
+                        </button>
+                    </div>
+                    <div id="upload-progress" class="progress-linear hidden">
                         <div class="progress-linear-fill"></div>
                     </div>
                 </div>
