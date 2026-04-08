@@ -46,6 +46,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 加载首页状态
     await refreshStatus();
+
+    // 检查是否有正在进行的下载任务（页面刷新后恢复进度）
+    await checkOngoingDownload();
 });
 
 // ============================================
