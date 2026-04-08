@@ -301,8 +301,7 @@ func handleUpload(req *http.Request) (*plugin.RouterResponse, error) {
 		return plugin.ErrorResponse(http.StatusInternalServerError, "保存文件失败: "+err.Error()), nil
 	}
 
-	// 设置可执行权限
-	os.Chmod(targetPath, 0755)
+	// 注意：WASM 环境下无法设置文件权限，由宿主端 ExecuteCommand 在执行前自动设置
 
 	slog.Info("cloudflared 上传完成", "path", targetPath, "size", written)
 
