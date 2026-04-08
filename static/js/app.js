@@ -17,6 +17,7 @@ const PLATFORM_MAP = {
 let currentTab = 'home';
 let pollTimer = null;
 let serverPort = '58091';
+let serverPlatform = 'linux-amd64';
 
 // ============================================
 // 初始化
@@ -28,7 +29,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         tab.addEventListener('click', () => switchTab(tab.dataset.tab));
     });
 
-    // 获取服务器端口
+    // 获取服务器端口和平台信息
     try {
         serverPort = await getServerPort();
         document.getElementById('server-port').textContent = serverPort;
@@ -36,9 +37,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('获取端口失败:', e);
     }
 
-    // 检测平台
-    const platform = detectPlatform();
-    document.getElementById('detected-platform').textContent = platform;
+    try {
+        serverPlatform = await getServerPlatform();
+        document.getElementById('detected-platform').textContent = serverPlatform;
+    } catch (e) {
+        console.error('获取平台信息失败:', e);
+    }
 
     // 加载首页状态
     await refreshStatus();
@@ -68,44 +72,15 @@ function switchTab(tabName) {
 }
 
 // ============================================
-// 平台检测
-// ============================================
-
-function detectPlatform() {
-    const ua = navigator.userAgent.toLowerCase();
-    const platform = navigator.platform.toLowerCase();
-
-    let os, arch;
-
-    // 检测 OS
-    if (platform.includes('mac') || ua.includes('macintosh')) {
-        os = 'darwin';
-    } else if (platform.includes('win') || ua.includes('windows')) {
-        os = 'windows';
-    } else {
-        os = 'linux';
-    }
-
-    // 检测 Arch
-    if (ua.includes('aarch64') || ua.includes('arm64')) {
-        arch = 'arm64';
-    } else if (ua.includes('armv7') || ua.includes('arm')) {
-        arch = 'armv7';
-    } else {
-        arch = 'amd64';
-    }
-
-    return os + '-' + arch;
-}
-
-// ============================================
 // 首页功能
 // ============================================
 
 async function refreshStatus() {
     try {
-        const data = await apiGet('/api/status');
-        updateStatusUI(data);
+        const resp = await apiGet('/api/status');
+        if (resp && resp.data) {
+            updateStatusUI(resp.data);
+        }
     } catch (e) {
         console.error('获取状态失败:', e);
     }
@@ -157,9 +132,9 @@ async function startTunnel() {
     btn.innerHTML = '<span class="material-symbols-outlined">hourglass_empty</span> 启动中...';
 
     try {
-        const data = await apiPost('/api/start', { port: serverPort });
-        if (data.message) {
-            showSnackbar(data.message);
+        const resp = await apiPost('/api/start', { port: serverPort });
+        if (resp && resp.data && resp.data.message) {
+            showSnackbar(resp.data.message);
         }
         // 延迟刷新状态
         setTimeout(refreshStatus, 1000);
@@ -176,9 +151,9 @@ async function stopTunnel() {
     btn.disabled = true;
 
     try {
-        const data = await apiPost('/api/stop', {});
-        if (data.message) {
-            showSnackbar(data.message);
+        const resp = await apiPost('/api/stop', {});
+        if (resp && resp.data && resp.data.message) {
+            showSnackbar(resp.data.message);
         }
         stopPolling();
         setTimeout(refreshStatus, 500);
@@ -208,8 +183,9 @@ function stopPolling() {
 
 async function pollOutput() {
     try {
-        const data = await apiGet('/api/output');
-        if (!data) return;
+        const resp = await apiGet('/api/output');
+        if (!resp || !resp.data) return;
+        const data = resp.data;
 
         // 合并 stdout 和 stderr
         const output = (data.stderr || '') + (data.stdout || '');
@@ -265,9 +241,9 @@ async function loadReleaseInfo() {
     versionEl.textContent = '加载中...';
 
     try {
-        const data = await apiGet('/api/releases');
-        if (data && data.tag_name) {
-            versionEl.textContent = data.tag_name;
+        const resp = await apiGet('/api/releases');
+        if (resp && resp.data && resp.data.tag_name) {
+            versionEl.textContent = resp.data.tag_name;
             downloadBtn.disabled = false;
         } else {
             versionEl.textContent = '获取失败';
@@ -281,10 +257,8 @@ async function loadReleaseInfo() {
 async function downloadCloudflared() {
     const btn = document.getElementById('btn-download');
     const progressBar = document.getElementById('download-progress');
-    const platform = detectPlatform();
-
-    if (!PLATFORM_MAP[platform]) {
-        showSnackbar('不支持的平台: ' + platform);
+    if (!PLATFORM_MAP[serverPlatform]) {
+        showSnackbar('不支持的平台: ' + serverPlatform);
         return;
     }
 
@@ -295,18 +269,18 @@ async function downloadCloudflared() {
     progressBar.classList.add('progress-indeterminate');
 
     try {
-        const data = await apiPost('/api/download', { platform: platform });
+        const resp = await apiPost('/api/download', { platform: serverPlatform });
         progressBar.classList.remove('progress-indeterminate');
 
-        if (data && data.success) {
+        if (resp && resp.data && resp.data.success) {
             progressBar.querySelector('.progress-linear-fill').style.width = '100%';
-            showSnackbar('下载完成: ' + (data.version || ''));
+            showSnackbar('下载完成: ' + (resp.data.version || ''));
             // 刷新首页状态
             refreshStatus();
             // 刷新设置页版本信息
             loadReleaseInfo();
         } else {
-            showSnackbar('下载失败: ' + (data.message || '未知错误'));
+            showSnackbar('下载失败: ' + (resp && resp.data ? resp.data.message : '未知错误'));
         }
     } catch (e) {
         showSnackbar('下载失败: ' + e.message);

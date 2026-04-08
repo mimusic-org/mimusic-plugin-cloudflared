@@ -70,3 +70,21 @@ function getServerPort() {
     })
     .catch(() => '58091');
 }
+
+/**
+ * 获取服务器平台信息（从 configs API）
+ * 返回格式如：darwin-arm64, linux-amd64, windows-amd64
+ */
+function getServerPlatform() {
+    return fetch(CONFIGS_API + '/server_platform', {
+        method: 'GET',
+        headers: buildHeaders()
+    }).then(response => response.json())
+    .then(data => {
+        if (data && data.value) {
+            return data.value;
+        }
+        return 'linux-amd64'; // 默认平台
+    })
+    .catch(() => 'linux-amd64');
+}
