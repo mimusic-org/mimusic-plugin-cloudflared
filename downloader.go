@@ -14,6 +14,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	pluginhttp "github.com/mimusic-org/plugin/pkg/go-plugin-http/http"
 )
 
 // platformMapping 平台到 cloudflared 下载文件名的映射
@@ -54,7 +56,7 @@ type downloadResult struct {
 
 // getLatestRelease 获取 GitHub 最新 release 信息
 func getLatestRelease() (*githubRelease, error) {
-	resp, err := http.Get("https://api.github.com/repos/cloudflare/cloudflared/releases/latest")
+	resp, err := pluginhttp.Get("https://api.github.com/repos/cloudflare/cloudflared/releases/latest")
 	if err != nil {
 		return nil, fmt.Errorf("请求 GitHub API 失败: %w", err)
 	}
@@ -64,8 +66,13 @@ func getLatestRelease() (*githubRelease, error) {
 		return nil, fmt.Errorf("GitHub API 返回状态码: %d", resp.StatusCode)
 	}
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应体失败: %w", err)
+	}
+
 	var release githubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+	if err := json.Unmarshal(body, &release); err != nil {
 		return nil, fmt.Errorf("解析 release 信息失败: %w", err)
 	}
 
@@ -107,7 +114,7 @@ func downloadCloudflared(platform string) (*downloadResult, error) {
 	}
 
 	// 下载文件
-	resp, err := http.Get(downloadURL)
+	resp, err := pluginhttp.Get(downloadURL)
 	if err != nil {
 		return nil, fmt.Errorf("下载失败: %w", err)
 	}
