@@ -130,8 +130,30 @@ body {
     position: relative;
 }
 
+.tab-item::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%) scaleX(0);
+    width: 64px;
+    height: 32px;
+    background: var(--md-primary-container);
+    border-radius: 16px;
+    z-index: -1;
+    transition: transform .2s;
+}
+
 .tab-item.active {
     color: var(--md-primary);
+}
+
+.tab-item.active::after {
+    transform: translateX(-50%) scaleX(1);
+}
+
+.tab-item:hover:not(.active) {
+    background: rgba(99,102,241,.06);
 }
 
 .tab-item .material-symbols-outlined {
