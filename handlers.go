@@ -10,10 +10,43 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"regexp"
+	"sync"
 
 	"github.com/mimusic-org/plugin/api/pbplugin"
 	"github.com/mimusic-org/plugin/api/plugin"
 )
+
+// tunnelURLCache 缓存提取到的隧道 URL
+var (
+	tunnelURLCache   string
+	tunnelURLCacheMu sync.RWMutex
+	tunnelURLRegex   = regexp.MustCompile(`https?://[a-zA-Z0-9-]+\.trycloudflare\.com`)
+)
+
+// setTunnelURL 设置缓存的隧道 URL
+func setTunnelURL(url string) {
+	tunnelURLCacheMu.Lock()
+	defer tunnelURLCacheMu.Unlock()
+	if tunnelURLCache == "" && url != "" {
+		tunnelURLCache = url
+		slog.Info("隧道 URL 已缓存", "url", url)
+	}
+}
+
+// getTunnelURL 获取缓存的隧道 URL
+func getTunnelURL() string {
+	tunnelURLCacheMu.RLock()
+	defer tunnelURLCacheMu.RUnlock()
+	return tunnelURLCache
+}
+
+// clearTunnelURL 清空缓存的隧道 URL（启动新隧道时调用）
+func clearTunnelURL() {
+	tunnelURLCacheMu.Lock()
+	defer tunnelURLCacheMu.Unlock()
+	tunnelURLCache = ""
+}
 
 // statusResponse 状态响应
 type statusResponse struct {
@@ -133,6 +166,9 @@ func handleStart(req *http.Request) (*plugin.RouterResponse, error) {
 		return plugin.ErrorResponse(http.StatusInternalServerError, "启动失败: "+resp.Message), nil
 	}
 
+	// 清空之前缓存的隧道 URL
+	clearTunnelURL()
+
 	slog.Info("cloudflared tunnel 已启动", "port", body.Port)
 	return plugin.SuccessResponse(map[string]string{
 		"message":    "cloudflared 已启动",
@@ -181,6 +217,12 @@ func handleOutput(req *http.Request) (*plugin.RouterResponse, error) {
 
 	if !resp.Success {
 		return plugin.ErrorResponse(http.StatusNotFound, resp.Message), nil
+	}
+
+	// 解析输出中的隧道 URL 并缓存
+	output := resp.Stderr + resp.Stdout
+	if matches := tunnelURLRegex.FindStringSubmatch(output); len(matches) > 0 {
+		setTunnelURL(matches[0])
 	}
 
 	return plugin.SuccessResponse(map[string]interface{}{
@@ -236,6 +278,15 @@ func handleDownloadStatus(req *http.Request) (*plugin.RouterResponse, error) {
 		"total_bytes":      resp.TotalBytes,
 		"progress_percent": resp.ProgressPercent,
 		"error":            resp.Error,
+	}), nil
+}
+
+// handleTunnelURL 获取缓存的隧道 URL
+// GET /cloudflared/api/tunnel-url
+func handleTunnelURL(req *http.Request) (*plugin.RouterResponse, error) {
+	url := getTunnelURL()
+	return plugin.SuccessResponse(map[string]string{
+		"url": url,
 	}), nil
 }
 

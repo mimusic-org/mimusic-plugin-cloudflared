@@ -49,6 +49,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 检查是否有正在进行的下载任务（页面刷新后恢复进度）
     await checkOngoingDownload();
+
+    // 页面加载时检查是否已有缓存的隧道 URL
+    await pollTunnelUrl();
 });
 
 // ============================================
@@ -176,6 +179,8 @@ function startPolling() {
     if (pollTimer) return;
     pollOutput();
     pollTimer = setInterval(pollOutput, 2000);
+    // 同时启动隧道 URL 轮询
+    startTunnelUrlPolling();
 }
 
 function stopPolling() {
@@ -183,6 +188,8 @@ function stopPolling() {
         clearInterval(pollTimer);
         pollTimer = null;
     }
+    // 同时停止隧道 URL 轮询
+    stopTunnelUrlPolling();
 }
 
 async function pollOutput() {
@@ -199,19 +206,6 @@ async function pollOutput() {
             logEl.scrollTop = logEl.scrollHeight;
         }
 
-        // 解析 trycloudflare.com 域名
-        const urlMatch = output.match(/https?:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/);
-        if (urlMatch) {
-            const tunnelUrl = urlMatch[0];
-            const urlEl = document.getElementById('tunnel-url');
-            const linkEl = document.getElementById('tunnel-link');
-            if (urlEl && linkEl) {
-                linkEl.href = tunnelUrl;
-                linkEl.textContent = tunnelUrl;
-                urlEl.classList.remove('hidden');
-            }
-        }
-
         // 检查进程是否已停止
         if (data.running === false) {
             stopPolling();
@@ -219,6 +213,46 @@ async function pollOutput() {
         }
     } catch (e) {
         console.error('轮询输出失败:', e);
+    }
+}
+
+// 轮询隧道 URL（从后端缓存获取）
+async function pollTunnelUrl() {
+    try {
+        const resp = await apiGet('/api/tunnel-url');
+        if (!resp || !resp.data) return;
+
+        const tunnelUrl = resp.data.url;
+        if (tunnelUrl) {
+            const urlEl = document.getElementById('tunnel-url');
+            const linkEl = document.getElementById('tunnel-link');
+            if (urlEl && linkEl) {
+                linkEl.href = tunnelUrl;
+                linkEl.textContent = tunnelUrl;
+                urlEl.classList.remove('hidden');
+            }
+            // 获取到 URL 后停止轮询
+            stopTunnelUrlPolling();
+        }
+    } catch (e) {
+        console.error('获取隧道 URL 失败:', e);
+    }
+}
+
+let tunnelUrlPollTimer = null;
+
+function startTunnelUrlPolling() {
+    if (tunnelUrlPollTimer) return;
+    // 立即执行一次
+    pollTunnelUrl();
+    // 每 2 秒轮询一次
+    tunnelUrlPollTimer = setInterval(pollTunnelUrl, 2000);
+}
+
+function stopTunnelUrlPolling() {
+    if (tunnelUrlPollTimer) {
+        clearInterval(tunnelUrlPollTimer);
+        tunnelUrlPollTimer = null;
     }
 }
 
