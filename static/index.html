@@ -145,11 +145,11 @@
                     <p style="color:var(--md-on-surface-variant);font-size:14px;margin:0 0 12px;">
                         如果自动下载失败，可以手动下载后上传。
                     </p>
-                    <div class="info-row">
+                    <div class="info-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
                         <span class="info-label">下载链接</span>
-                        <span class="info-value" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                            <a id="manual-download-link" href="#" style="color:var(--md-primary);text-decoration:none;word-break:break-all;">加载中...</a>
-                            <button class="btn-copy" onclick="copyDownloadLink()" title="复制链接">
+                        <span class="info-value" style="display:flex;align-items:flex-start;gap:8px;width:100%;">
+                            <a id="manual-download-link" href="#" style="color:var(--md-primary);text-decoration:none;word-break:break-all;font-size:12px;flex:1;">加载中...</a>
+                            <button class="btn-copy" onclick="copyDownloadLink()" title="复制链接" style="flex-shrink:0;">
                                 <span class="material-symbols-outlined" style="font-size:16px;">content_copy</span>
                             </button>
                         </span>

@@ -378,7 +378,7 @@ function loadManualDownloadLink() {
     }
     const url = 'https://github.com/cloudflare/cloudflared/releases/latest/download/' + mapping.file;
     linkEl.href = url;
-    linkEl.textContent = mapping.file;
+    linkEl.textContent = url;
 }
 
 // 复制下载链接到剪贴板
