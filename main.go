@@ -74,6 +74,7 @@ func (p *Plugin) Init(ctx context.Context, request *pbplugin.InitRequest) (*empt
 	rm.RegisterRouter(ctx, "POST", "/cloudflared/api/stop", handleStop, true)
 	rm.RegisterRouter(ctx, "GET", "/cloudflared/api/output", handleOutput, true)
 	rm.RegisterRouter(ctx, "POST", "/cloudflared/api/download", handleDownload, true)
+	rm.RegisterRouter(ctx, "GET", "/cloudflared/api/download/status", handleDownloadStatus, true)
 	rm.RegisterRouter(ctx, "GET", "/cloudflared/api/releases", handleReleases, true)
 
 	slog.Info("Cloudflared 隧道插件路由注册完成", "version", p.Version)

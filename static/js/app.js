@@ -254,6 +254,8 @@ async function loadReleaseInfo() {
     }
 }
 
+let downloadPollTimer = null;
+
 async function downloadCloudflared() {
     const btn = document.getElementById('btn-download');
     const progressBar = document.getElementById('download-progress');
@@ -263,33 +265,98 @@ async function downloadCloudflared() {
     }
 
     btn.disabled = true;
-    btn.innerHTML = '<span class="material-symbols-outlined">downloading</span> 下载中...';
+    btn.innerHTML = '<span class="material-symbols-outlined">downloading</span> 启动下载...';
     progressBar.classList.remove('hidden');
     progressBar.querySelector('.progress-linear-fill').style.width = '0%';
     progressBar.classList.add('progress-indeterminate');
 
     try {
         const resp = await apiPost('/api/download', { platform: serverPlatform });
-        progressBar.classList.remove('progress-indeterminate');
 
         if (resp && resp.data && resp.data.success) {
-            progressBar.querySelector('.progress-linear-fill').style.width = '100%';
-            showSnackbar('下载完成: ' + (resp.data.version || ''));
+            showSnackbar('下载任务已启动');
+            btn.innerHTML = '<span class="material-symbols-outlined">downloading</span> 下载中...';
+            progressBar.classList.remove('progress-indeterminate');
+            // 开始轮询下载进度
+            startDownloadPolling();
+        } else {
+            progressBar.classList.remove('progress-indeterminate');
+            showSnackbar('启动下载失败: ' + (resp && resp.data ? resp.data.message : '未知错误'));
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-symbols-outlined">download</span> 下载最新版本';
+            progressBar.classList.add('hidden');
+        }
+    } catch (e) {
+        progressBar.classList.remove('progress-indeterminate');
+        showSnackbar('启动下载失败: ' + e.message);
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined">download</span> 下载最新版本';
+        progressBar.classList.add('hidden');
+    }
+}
+
+function startDownloadPolling() {
+    if (downloadPollTimer) return;
+    pollDownloadStatus();
+    downloadPollTimer = setInterval(pollDownloadStatus, 1000);
+}
+
+function stopDownloadPolling() {
+    if (downloadPollTimer) {
+        clearInterval(downloadPollTimer);
+        downloadPollTimer = null;
+    }
+}
+
+async function pollDownloadStatus() {
+    const btn = document.getElementById('btn-download');
+    const progressBar = document.getElementById('download-progress');
+    const progressFill = progressBar.querySelector('.progress-linear-fill');
+
+    try {
+        const resp = await apiGet('/api/download/status');
+        if (!resp || !resp.data) return;
+        const data = resp.data;
+
+        if (data.status === 'downloading') {
+            // 更新进度条
+            if (data.progress_percent > 0) {
+                progressFill.style.width = data.progress_percent + '%';
+            }
+            // 更新按钮文字显示进度
+            if (data.total_bytes > 0) {
+                const downloadedMB = (data.downloaded_bytes / 1024 / 1024).toFixed(1);
+                const totalMB = (data.total_bytes / 1024 / 1024).toFixed(1);
+                btn.innerHTML = '<span class="material-symbols-outlined">downloading</span> ' + downloadedMB + ' / ' + totalMB + ' MB';
+            }
+        } else if (data.status === 'completed') {
+            stopDownloadPolling();
+            progressFill.style.width = '100%';
+            showSnackbar('下载完成');
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-symbols-outlined">download</span> 下载最新版本';
             // 刷新首页状态
             refreshStatus();
             // 刷新设置页版本信息
             loadReleaseInfo();
-        } else {
-            showSnackbar('下载失败: ' + (resp && resp.data ? resp.data.message : '未知错误'));
+            setTimeout(() => {
+                progressBar.classList.add('hidden');
+            }, 2000);
+        } else if (data.status === 'failed') {
+            stopDownloadPolling();
+            showSnackbar('下载失败: ' + (data.error || '未知错误'));
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-symbols-outlined">download</span> 下载最新版本';
+            progressBar.classList.add('hidden');
+        } else if (data.status === 'not_found') {
+            stopDownloadPolling();
+            showSnackbar('下载任务不存在');
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-symbols-outlined">download</span> 下载最新版本';
+            progressBar.classList.add('hidden');
         }
     } catch (e) {
-        showSnackbar('下载失败: ' + e.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<span class="material-symbols-outlined">download</span> 下载最新版本';
-        setTimeout(() => {
-            progressBar.classList.add('hidden');
-        }, 2000);
+        console.error('轮询下载状态失败:', e);
     }
 }
 

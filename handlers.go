@@ -190,9 +190,11 @@ func handleOutput(req *http.Request) (*plugin.RouterResponse, error) {
 	}), nil
 }
 
-// handleDownload 下载 cloudflared
+// handleDownload 异步下载 cloudflared
 // POST /cloudflared/api/download
 func handleDownload(req *http.Request) (*plugin.RouterResponse, error) {
+	pluginID := plugin.GetPluginId()
+
 	var body downloadRequest
 	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
 		return plugin.ErrorResponse(http.StatusBadRequest, "无效的请求体: "+err.Error()), nil
@@ -202,15 +204,38 @@ func handleDownload(req *http.Request) (*plugin.RouterResponse, error) {
 		return plugin.ErrorResponse(http.StatusBadRequest, "平台信息不能为空"), nil
 	}
 
-	slog.Info("开始下载 cloudflared", "platform", body.Platform)
+	slog.Info("启动异步下载 cloudflared", "platform", body.Platform)
 
-	result, err := downloadCloudflared(body.Platform)
+	result, err := startDownloadCloudflared(req.Context(), body.Platform, pluginID)
 	if err != nil {
-		slog.Error("下载 cloudflared 失败", "error", err)
-		return plugin.ErrorResponse(http.StatusInternalServerError, "下载失败: "+err.Error()), nil
+		slog.Error("启动下载 cloudflared 失败", "error", err)
+		return plugin.ErrorResponse(http.StatusInternalServerError, "启动下载失败: "+err.Error()), nil
 	}
 
 	return plugin.SuccessResponse(result), nil
+}
+
+// handleDownloadStatus 获取下载进度
+// GET /cloudflared/api/download/status
+func handleDownloadStatus(req *http.Request) (*plugin.RouterResponse, error) {
+	pluginID := plugin.GetPluginId()
+
+	hostFunctions := pbplugin.NewHostFunctions()
+	resp, err := hostFunctions.GetDownloadStatus(req.Context(), &pbplugin.GetDownloadStatusRequest{
+		TaskId:   downloadTaskID,
+		PluginId: pluginID,
+	})
+	if err != nil {
+		return plugin.ErrorResponse(http.StatusInternalServerError, "查询下载状态失败: "+err.Error()), nil
+	}
+
+	return plugin.SuccessResponse(map[string]interface{}{
+		"status":           resp.Status,
+		"downloaded_bytes": resp.DownloadedBytes,
+		"total_bytes":      resp.TotalBytes,
+		"progress_percent": resp.ProgressPercent,
+		"error":            resp.Error,
+	}), nil
 }
 
 // handleReleases 获取 GitHub 最新 release 信息

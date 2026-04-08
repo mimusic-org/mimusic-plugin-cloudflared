@@ -4,19 +4,20 @@
 package main
 
 import (
-	"archive/tar"
-	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/mimusic-org/plugin/api/pbplugin"
 	pluginhttp "github.com/mimusic-org/plugin/pkg/go-plugin-http/http"
 )
+
+// downloadTaskID 下载任务的固定标识符
+const downloadTaskID = "download-cloudflared"
 
 // platformMapping 平台到 cloudflared 下载文件名的映射
 var platformMapping = map[string]struct {
@@ -46,10 +47,11 @@ type githubAsset struct {
 	Size               int64  `json:"size"`
 }
 
-// downloadResult 下载结果
-type downloadResult struct {
+// downloadStartResult 异步下载启动结果
+type downloadStartResult struct {
 	Success  bool   `json:"success"`
 	Message  string `json:"message"`
+	TaskID   string `json:"task_id"`
 	Version  string `json:"version,omitempty"`
 	Platform string `json:"platform,omitempty"`
 }
@@ -79,8 +81,9 @@ func getLatestRelease() (*githubRelease, error) {
 	return &release, nil
 }
 
-// downloadCloudflared 下载 cloudflared 二进制文件
-func downloadCloudflared(platform string) (*downloadResult, error) {
+// startDownloadCloudflared 启动异步下载 cloudflared 二进制文件
+// 通过 DownloadFile Host Function 将下载任务交给宿主端执行
+func startDownloadCloudflared(ctx context.Context, platform string, pluginID int64) (*downloadStartResult, error) {
 	mapping, ok := platformMapping[platform]
 	if !ok {
 		return nil, fmt.Errorf("不支持的平台: %s", platform)
@@ -105,104 +108,38 @@ func downloadCloudflared(platform string) (*downloadResult, error) {
 		return nil, fmt.Errorf("未找到平台 %s 对应的下载文件 %s", platform, mapping.FileName)
 	}
 
-	slog.Info("开始下载 cloudflared", "url", downloadURL, "platform", platform)
+	slog.Info("启动异步下载 cloudflared", "url", downloadURL, "platform", platform)
 
-	// 确保 bin 目录存在
-	binDir := "/cloudflared/bin"
-	if err := os.MkdirAll(binDir, 0755); err != nil {
-		return nil, fmt.Errorf("创建 bin 目录失败: %w", err)
-	}
-
-	// 下载文件
-	resp, err := pluginhttp.Get(downloadURL)
-	if err != nil {
-		return nil, fmt.Errorf("下载失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("下载返回状态码: %d", resp.StatusCode)
-	}
-
-	// 确定目标文件名
+	// 确定目标文件名和路径（WASM 视角）
 	targetName := "cloudflared"
 	if strings.Contains(platform, "windows") {
 		targetName = "cloudflared.exe"
 	}
-	targetPath := filepath.Join(binDir, targetName)
+	destPath := "/cloudflared/bin/" + targetName
 
-	if mapping.NeedsExtract {
-		// macOS: 需要解压 .tgz 文件
-		if err := extractTgz(resp.Body, binDir, targetName); err != nil {
-			return nil, fmt.Errorf("解压 tgz 失败: %w", err)
-		}
-	} else {
-		// Linux/Windows: 直接写入二进制文件
-		outFile, err := os.Create(targetPath)
-		if err != nil {
-			return nil, fmt.Errorf("创建文件失败: %w", err)
-		}
-		defer outFile.Close()
-
-		if _, err := io.Copy(outFile, resp.Body); err != nil {
-			return nil, fmt.Errorf("写入文件失败: %w", err)
-		}
+	// 调用 DownloadFile Host Function
+	hostFunctions := pbplugin.NewHostFunctions()
+	resp, err := hostFunctions.DownloadFile(ctx, &pbplugin.DownloadFileRequest{
+		Url:               downloadURL,
+		DestPath:          destPath,
+		TaskId:            downloadTaskID,
+		PluginId:          pluginID,
+		ExtractTgz:        mapping.NeedsExtract,
+		ExtractTargetName: targetName,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("调用 DownloadFile 失败: %w", err)
 	}
 
-	// 设置可执行权限（非 Windows）
-	if !strings.Contains(platform, "windows") {
-		if err := os.Chmod(targetPath, 0755); err != nil {
-			slog.Warn("设置可执行权限失败", "error", err)
-		}
+	if !resp.Success {
+		return nil, fmt.Errorf("启动下载失败: %s", resp.Message)
 	}
 
-	slog.Info("cloudflared 下载完成", "path", targetPath, "version", release.TagName)
-
-	return &downloadResult{
+	return &downloadStartResult{
 		Success:  true,
-		Message:  "下载完成",
+		Message:  "下载任务已启动",
+		TaskID:   resp.TaskId,
 		Version:  release.TagName,
 		Platform: platform,
 	}, nil
-}
-
-// extractTgz 从 .tgz 文件中提取 cloudflared 可执行文件
-func extractTgz(reader io.Reader, destDir string, targetName string) error {
-	gzReader, err := gzip.NewReader(reader)
-	if err != nil {
-		return fmt.Errorf("创建 gzip reader 失败: %w", err)
-	}
-	defer gzReader.Close()
-
-	tarReader := tar.NewReader(gzReader)
-
-	for {
-		header, err := tarReader.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("读取 tar 条目失败: %w", err)
-		}
-
-		// 查找 cloudflared 可执行文件
-		baseName := filepath.Base(header.Name)
-		if baseName == "cloudflared" && header.Typeflag == tar.TypeReg {
-			targetPath := filepath.Join(destDir, targetName)
-			outFile, err := os.Create(targetPath)
-			if err != nil {
-				return fmt.Errorf("创建目标文件失败: %w", err)
-			}
-			defer outFile.Close()
-
-			if _, err := io.Copy(outFile, tarReader); err != nil {
-				return fmt.Errorf("写入目标文件失败: %w", err)
-			}
-
-			slog.Info("已从 tgz 中提取 cloudflared", "path", targetPath)
-			return nil
-		}
-	}
-
-	return fmt.Errorf("tgz 中未找到 cloudflared 可执行文件")
 }
