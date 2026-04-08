@@ -381,6 +381,18 @@ function loadManualDownloadLink() {
     linkEl.textContent = mapping.file;
 }
 
+// 复制下载链接到剪贴板
+function copyDownloadLink() {
+    const linkEl = document.getElementById('manual-download-link');
+    if (linkEl && linkEl.href) {
+        navigator.clipboard.writeText(linkEl.href).then(() => {
+            showSnackbar('下载链接已复制到剪贴板');
+        }).catch(() => {
+            showSnackbar('复制失败');
+        });
+    }
+}
+
 async function uploadCloudflared() {
     const fileInput = document.getElementById('upload-file-input');
     const btn = document.getElementById('btn-upload');

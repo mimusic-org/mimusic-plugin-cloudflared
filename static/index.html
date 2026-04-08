@@ -147,8 +147,11 @@
                     </p>
                     <div class="info-row">
                         <span class="info-label">下载链接</span>
-                        <span class="info-value">
-                            <a id="manual-download-link" href="#" target="_blank" style="color:var(--md-primary);text-decoration:none;word-break:break-all;">加载中...</a>
+                        <span class="info-value" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                            <a id="manual-download-link" href="#" style="color:var(--md-primary);text-decoration:none;word-break:break-all;">加载中...</a>
+                            <button class="btn-copy" onclick="copyDownloadLink()" title="复制链接">
+                                <span class="material-symbols-outlined" style="font-size:16px;">content_copy</span>
+                            </button>
                         </span>
                     </div>
                     <div class="action-row" style="gap:8px;flex-wrap:wrap;">
