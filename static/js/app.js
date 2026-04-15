@@ -24,6 +24,18 @@ let serverPlatform = 'linux-amd64';
 // ============================================
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // 设置初始历史状态（使用 replaceState 避免多余条目）
+    history.replaceState({ tab: 'home' }, '', '#home');
+
+    // 监听浏览器返回/前进，恢复对应 Tab
+    window.addEventListener('popstate', (event) => {
+        if (event.state && event.state.tab) {
+            window._isPopState = true;
+            switchTab(event.state.tab);
+            window._isPopState = false;
+        }
+    });
+
     // 初始化 Tab 切换
     document.querySelectorAll('.tab-item').forEach(tab => {
         tab.addEventListener('click', () => switchTab(tab.dataset.tab));
@@ -59,6 +71,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ============================================
 
 function switchTab(tabName) {
+    // 如果不是由 popstate 触发，则推入历史记录
+    if (!window._isPopState) {
+        history.pushState({ tab: tabName }, '', '#' + tabName);
+    }
     currentTab = tabName;
 
     // 更新 Tab 按钮状态
