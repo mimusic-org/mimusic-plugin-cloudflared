@@ -49,7 +49,6 @@ func (p *Plugin) GetPluginInfo(ctx context.Context, request *emptypb.Empty) (*pb
 			Description: "通过 Cloudflare Tunnel 将本地 MiMusic 服务暴露到公网，支持 cloudflared 的下载和管理",
 			Author:      "MiMusic Team",
 			Homepage:    "https://github.com/mimusic-org/mimusic",
-			EntryPath:   "/cloudflared",
 		},
 	}, nil
 }
@@ -66,18 +65,18 @@ func (p *Plugin) Init(ctx context.Context, request *pbplugin.InitRequest) (*empt
 	rm := plugin.GetRouterManager()
 
 	// 初始化静态文件处理器
-	p.staticHandler = plugin.NewStaticHandler(staticFS, "/cloudflared", rm, ctx)
+	p.staticHandler = plugin.NewStaticHandler(staticFS, rm, ctx)
 
 	// 注册 API 路由（需要认证）
-	rm.RegisterRouter(ctx, "GET", "/cloudflared/api/status", handleStatus, true)
-	rm.RegisterRouter(ctx, "POST", "/cloudflared/api/start", handleStart, true)
-	rm.RegisterRouter(ctx, "POST", "/cloudflared/api/stop", handleStop, true)
-	rm.RegisterRouter(ctx, "GET", "/cloudflared/api/output", handleOutput, true)
-	rm.RegisterRouter(ctx, "GET", "/cloudflared/api/tunnel-url", handleTunnelURL, true)
-	rm.RegisterRouter(ctx, "POST", "/cloudflared/api/download", handleDownload, true)
-	rm.RegisterRouter(ctx, "GET", "/cloudflared/api/download/status", handleDownloadStatus, true)
-	rm.RegisterRouter(ctx, "POST", "/cloudflared/api/upload", handleUpload, true)
-	rm.RegisterRouter(ctx, "GET", "/cloudflared/api/releases", handleReleases, true)
+	rm.RegisterRouter(ctx, "GET", "/api/status", handleStatus, true)
+	rm.RegisterRouter(ctx, "POST", "/api/start", handleStart, true)
+	rm.RegisterRouter(ctx, "POST", "/api/stop", handleStop, true)
+	rm.RegisterRouter(ctx, "GET", "/api/output", handleOutput, true)
+	rm.RegisterRouter(ctx, "GET", "/api/tunnel-url", handleTunnelURL, true)
+	rm.RegisterRouter(ctx, "POST", "/api/download", handleDownload, true)
+	rm.RegisterRouter(ctx, "GET", "/api/download/status", handleDownloadStatus, true)
+	rm.RegisterRouter(ctx, "POST", "/api/upload", handleUpload, true)
+	rm.RegisterRouter(ctx, "GET", "/api/releases", handleReleases, true)
 
 	slog.Info("Cloudflared 隧道插件路由注册完成", "version", p.Version)
 	return &emptypb.Empty{}, nil
