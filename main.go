@@ -48,7 +48,7 @@ func (p *Plugin) GetPluginInfo(ctx context.Context, request *emptypb.Empty) (*pb
 			Version:     p.Version,
 			Description: "通过 Cloudflare Tunnel 将本地 MiMusic 服务暴露到公网，支持 cloudflared 的下载和管理",
 			Author:      "MiMusic Team",
-			Homepage:    "https://github.com/mimusic-org/mimusic",
+			Homepage:    "https://github.com/mimusic-org/mimusic-plugin-cloudflared",
 		},
 	}, nil
 }
