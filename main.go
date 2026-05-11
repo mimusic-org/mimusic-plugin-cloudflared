@@ -34,7 +34,7 @@ type Plugin struct {
 // init 将 Plugin 实现注册到插件框架中。
 func init() {
 	plugin.RegisterPlugin(&Plugin{
-		Version: "2026.5.6",
+		Version: "2026.5.11",
 	})
 }
 
